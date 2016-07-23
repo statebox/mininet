@@ -1,0 +1,19 @@
+{
+  "name": "mininet",
+  "version": "1.0.0",
+  "description": "",
+  "main": "mininet.js",
+  "scripts": {
+    "test": "node_modules/.bin/tape test/*.js | node_modules/.bin/faucet "
+  },
+  "author": "wires",
+  "license": "AGPL-1.0",
+  "dependencies": {
+    "ramda": "^0.21.0",
+    "xstream": "^5.2.4"
+  },
+  "devDependencies": {
+    "faucet": "0.0.1",
+    "tape": "^4.6.0"
+  }
+}
