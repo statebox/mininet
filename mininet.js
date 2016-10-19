@@ -1,138 +1,89 @@
+'use strict'
+
 var R = require('ramda')
 
-var uniqPlaces = R.compose(R.uniq,R.unnest,R.unnest)
-var hasNegative= R.compose(R.not, R.equals(0), R.reduce(R.min, 0))
+const isPermutation = require('is-permutation')
 
-function gaps (uniquePlaces) {
-    if (hasNegative(uniquePlaces)) {
-        throw Error('Calling `gaps(xs)` with negatie numbers in xs is undefined')
-    }
-    var n = R.length(uniquePlaces) - 1
+const pre = id => R.compose(R.contains(id), R.head)
+const post = id => R.compose(R.contains(id), R.last)
 
-    // empty set has no gaps
-    if (n == -1) { return false }
+const findAll = R.curry((pred, xs) => R.unnest(R.addIndex(R.map)((x, i) => pred(x) ? [i] : [], xs)))
 
-    var s = R.sum(uniquePlaces)
-    var t = n * (n + 1) / 2 // if consequtive, this is what it should be
-    return Math.abs(s - t) >= 0.1
+function Mininet (net) {
+  // check that we get a list of transitions
+  if (R.not(net) || (R.not(R.isArrayLike(net)))) {
+    throw Error('Must specify a net')
+  }
+
+  // compute unique place id's and check if it is a permutation of 0..n
+  const places = R.compose(R.uniq, R.unnest, R.unnest)(net)
+  if (!isPermutation(places)) {
+    throw Error(`Net specification invalid,
+      place id not permutation of 0..n`)
+  }
+
+  // see pre/post transitions to place `i`
+  function viewPlace (i) {
+    const transitions = predicate => findAll(predicate(i), net)
+    return R.map(transitions, [post, pre])
+  }
+
+  const sortedPlaceIds = R.range(0, R.length(places))
+  this._places = R.map(viewPlace, sortedPlaceIds)
+  this._transitions = net
 }
 
-var mapIndexed = R.addIndex(R.map)
-var onlyIds = function (predicate) {
-    return R.compose(R.unnest, mapIndexed(function (transition, id) {
-        return predicate(transition) ? [id] : []
-    }))
-}
-
-// TODO speed up at some point (SQLite / Lovefield style?)
-// pick the place dual in a transition centric net
-// ()->[]->()   <==>   []->()->[]
-var dual = R.curry(function (net, placeId) {
-    "use strict";
-    // Transition -> nodelist
-    var is_adjacent = R.contains(placeId)
-    var is_pre = R.compose(is_adjacent, R.head)
-    var pre = onlyIds(is_pre)
-    var is_post = R.compose(is_adjacent, R.last)
-    var post = onlyIds(is_post)
-    return [pre(net), post(net)]
-})
-
-function Mininet  (netSpecification) {
-    // check that we get a list of transitions
-    var net = netSpecification.Net
-
-    if (R.not(net) || (R.not(R.isArrayLike(net)))) {
-        throw Error('Must specify a net, key `Net`')
-    } else {
-        this._transitions = net
-    }
-
-    var places = uniqPlaces(net)
-    if (gaps(places)) {
-        throw Error('specification has gaps')
-    } else {
-        this._places = R.map(dual(net), R.range(0, R.length(places)))
-    }
-}
-
-Mininet.prototype.placeCount = function () {
-    return R.length(this._places)
-}
-Mininet.prototype.transitionCount = function () {
-    return R.length(this._transitions)
-}
-
-Mininet.prototype.creators = function () {
-    "use strict";
-    return R.filter(function (t) {
-        return R.length(t[0]) === 0
-    }, this._transitions)
-}
-
-Mininet.prototype.annihilators = function () {
-    "use strict";
-    return R.filter(function (t) {
-        return R.length(t[1]) === 0
-    }, this._transitions)
-}
-
-function ensureRange(a, x, b, msg) {
-    "use strict";
-    if((a > x) || (x >= b)) {
-        throw Error(msg)
-    }
-}
-
-Mininet.prototype.place = function (placeId) {
-    ensureRange(0, placeId, this.placeCount(), 'place id out of range')
-    "use strict";
-    return {
-        id: placeId,
-        kind: "place"
-    }
-}
-
-Mininet.prototype.transition = function (transitionId) {
-    "use strict";
-    ensureRange(0, transitionId, this.transitionCount(), 'transition id out of range')
-    var t = this._transitions[transitionId]
-    return {
-        id: transitionId,
-        kind: 'transition',
-        pre: R.map(this.place.bind(this), t[0]),
-        post: R.map(this.place.bind(this), t[1])
-    }
-}
-
-Mininet.prototype.transitions = function () {
-    "use strict";
-    return R.map(this.transition.bind(this), R.range(0, this.transitionCount()))
+function ensureRange (a, x, b, msg) {
+  if ((a > x) || (x >= b)) {
+    throw Error(msg)
+  }
 }
 
 Mininet.prototype.places = function () {
-    "use strict";
-    return R.map(this.place.bind(this), R.range(0, this.placeCount()))
+  return R.length(this._places)
 }
 
+Mininet.prototype.transitions = function () {
+  return R.length(this._transitions)
+}
 
+Mininet.prototype.transition = function (i) {
+  this.ensureValidTransitionId(i)
+  return this._transitions[i]
+}
+
+Mininet.prototype.ensureValidPlaceId = function (i) {
+  const p = this.places()
+  ensureRange(0, i, p, 'place identifier out of range, 0 .. ' + p - 1)
+}
+
+Mininet.prototype.ensureValidTransitionId = function (i) {
+  const t = this.transitions()
+  ensureRange(0, i, t, 'transition identifier out of range, 0 .. ' + t - 1)
+}
+
+Mininet.prototype.place = function (i) {
+  this.ensureValidPlaceId(i)
+  return this._places[i]
+}
+
+const emptyPre = R.compose(R.isEmpty, R.head)
+const emptyPost = R.compose(R.isEmpty, R.last)
+
+Mininet.prototype.creators = function () {
+  return findAll(emptyPre, this._transitions)
+}
+
+Mininet.prototype.annihilators = function () {
+  return findAll(emptyPost, this._transitions)
+}
 
 Mininet.prototype.receivers = function () {
-    "use strict";
-    return R.filter(function (t) {
-        return R.length(t[0]) === 0
-    }, this._places)
+  return findAll(emptyPre, this._places)
 }
 
 Mininet.prototype.emitters = function () {
-    "use strict";
-    return R.filter(function (t) {
-        return R.length(t[1]) === 0
-    }, this._places)
+  return findAll(emptyPost, this._places)
 }
 
 module.exports = Mininet
-
-// for testing
-Mininet.gaps = gaps
-Mininet.dual = dual

@@ -9,8 +9,8 @@
   "author": "wires",
   "license": "AGPL-1.0",
   "dependencies": {
+    "is-permutation": "^1.0.0",
     "ramda": "^0.21.0",
-    "xstream": "^5.2.4"
   },
   "devDependencies": {
     "faucet": "0.0.1",
