@@ -4,13 +4,13 @@
   "description": "",
   "main": "mininet.js",
   "scripts": {
-    "test": "node_modules/.bin/tape test/*.js | node_modules/.bin/faucet "
+    "test": "node_modules/.bin/tape test/*.js | node_modules/.bin/faucet"
   },
   "author": "wires",
   "license": "AGPL-1.0",
   "dependencies": {
     "is-permutation": "^1.0.0",
-    "ramda": "^0.21.0",
+    "ramda": "^0.21.0"
   },
   "devDependencies": {
     "faucet": "0.0.1",
